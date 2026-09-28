@@ -6,7 +6,7 @@ const WHATSAPP_URL =
   "https://wa.me/18295980131?text=Hola%20Dra.%20Glenys%2C%20deseo%20informaci%C3%B3n%20sobre%20una%20consulta.";
 
 const MAP_URL =
-  "https://www.google.com/maps/search/?api=1&query=Centro+M%C3%A9dico+Constituci%C3%B3n+CEMECO+San+Crist%C3%B3bal+Rep%C3%BAblica+Dominicana";
+  "https://www.google.com/maps/search/?api=1&query=Centro+M%C3%A9dico+Constituci%C3%B3n+CEMECO%2C+Av.+Constituci%C3%B3n+Sur+61%2C+San+Crist%C3%B3bal%2C+Rep%C3%BAblica+Dominicana";
 
 const INSTAGRAM_URL = "https://www.instagram.com/dra.glenys_nutri/";
 
@@ -212,7 +212,7 @@ export default async function Home() {
         <div className="contact-copy">
           <p className="kicker">Contacto</p>
           <h2>Conversemos sobre la salud de tus hijos</h2>
-          <p>Consulta pediátrica y nutricional en el Centro Médico Constitución — CEMECO, San Cristóbal.</p>
+          <p>Consulta pediátrica y nutricional en el Centro Médico Constitución — CEMECO, Av. Constitución Sur no. 61, San Cristóbal.</p>
           <div className="contact-actions">
             <a className="button button-green" href={WHATSAPP_URL} target="_blank" rel="noreferrer">Escribir por WhatsApp</a>
             <a className="button button-outline" href={MAP_URL} target="_blank" rel="noreferrer">Ver ubicación</a>
@@ -220,7 +220,7 @@ export default async function Home() {
         </div>
         <div className="contact-details">
           <article><span>01</span><div><small>Centro médico</small><strong>Constitución — CEMECO</strong></div></article>
-          <article><span>02</span><div><small>Ubicación</small><strong>San Cristóbal, República Dominicana</strong></div></article>
+          <article><span>02</span><div><small>Dirección</small><strong>Av. Constitución Sur no. 61, San Cristóbal, República Dominicana</strong></div></article>
           <article><span>03</span><div><small>Horario de consulta</small><strong>Lunes 8:00 a. m. – 1:00 p. m. · Viernes desde las 4:00 p. m.</strong></div></article>
           <article><span>04</span><div><small>Instagram</small><a href={INSTAGRAM_URL} target="_blank" rel="noreferrer">@dra.glenys_nutri ↗</a></div></article>
           <article><span>05</span><div><small>WhatsApp</small><a href={WHATSAPP_URL} target="_blank" rel="noreferrer">829-598-0131 ↗</a></div></article>
