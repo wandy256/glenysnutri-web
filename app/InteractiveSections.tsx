@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { api, mediaUrl } from "../lib/api";
 
 declare global {
   interface Window {
@@ -69,10 +70,12 @@ function isInstagramPostUrl(url: string) {
 
 function getVisitorId() {
   const key = "glenys-visitor-id";
-  const existing = window.localStorage.getItem(key);
-  if (existing) return existing;
+  try {
+    const existing = window.localStorage.getItem(key);
+    if (existing) return existing;
+  } catch { /* navegación privada */ }
   const value = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `visitor-${Date.now()}`;
-  window.localStorage.setItem(key, value);
+  try { window.localStorage.setItem(key, value); } catch { /* sin almacenamiento */ }
   return value;
 }
 
@@ -88,7 +91,7 @@ export function BlogSection() {
 
   async function load(slug: string) {
     try {
-      const response = await fetch(`/api/engagement?post=${encodeURIComponent(slug)}`);
+      const response = await fetch(api(`/engagement?post=${encodeURIComponent(slug)}`));
       const payload = (await response.json()) as Engagement;
       setData((current) => ({ ...current, [slug]: { likes: payload.likes ?? 0, comments: payload.comments ?? [] } }));
     } catch {
@@ -97,7 +100,7 @@ export function BlogSection() {
   }
 
   useEffect(() => {
-    fetch("/api/public/posts")
+    fetch(api("/public/posts"))
       .then((response) => response.json())
       .then((payload: { posts?: PublicPost[] }) => {
         if (payload.posts?.length) setPosts(payload.posts);
@@ -115,7 +118,7 @@ export function BlogSection() {
       [slug]: { likes: (current[slug]?.likes ?? 0) + 1, comments: current[slug]?.comments ?? [] },
     }));
     try {
-      const response = await fetch("/api/engagement", {
+      const response = await fetch(api("/engagement"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "like", postSlug: slug, visitorId: getVisitorId() }),
@@ -135,7 +138,7 @@ export function BlogSection() {
     setSaving(true);
     setFeedback("");
     try {
-      const response = await fetch("/api/engagement", {
+      const response = await fetch(api("/engagement"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "comment", postSlug: selected.slug, author, message }),
@@ -168,7 +171,7 @@ export function BlogSection() {
           const symbols = ["🍐", "🍉", "🥬"];
           return (
             <article className="blog-card" key={post.slug}>
-              <div className={`post-cover ${post.theme ?? themes[index % themes.length]}`} style={post.coverKey ? { backgroundImage: `url(/media/${encodeURIComponent(post.coverKey)})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
+              <div className={`post-cover ${post.theme ?? themes[index % themes.length]}`} style={post.coverKey ? { backgroundImage: `url(${mediaUrl(post.coverKey)})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
                 <span>{post.category}</span>
                 {!post.coverKey ? <b aria-hidden="true">{post.symbol ?? symbols[index % symbols.length]}</b> : null}
               </div>
@@ -243,7 +246,7 @@ export function InstagramCarousel() {
   const move = (direction: number) => rail.current?.scrollBy({ left: direction * 330, behavior: "smooth" });
 
   useEffect(() => {
-    fetch("/api/public/instagram").then((response) => response.json()).then((payload: { posts?: InstagramItem[] }) => {
+    fetch(api("/public/instagram")).then((response) => response.json()).then((payload: { posts?: InstagramItem[] }) => {
       if (payload.posts?.length) setItems(payload.posts);
     }).catch(() => undefined);
   }, []);
@@ -288,7 +291,7 @@ export function InstagramCarousel() {
             </blockquote>
           </article>
         ) : (
-          <a className={`instagram-card ${item.color ?? ["insta-green", "insta-pink", "insta-cream"][index % 3]}`} href={item.url} target="_blank" rel="noreferrer" key={item.id ?? item.title} style={item.mediaKey ? { backgroundImage: `linear-gradient(to top, rgba(48,39,32,.72), transparent 65%), url(/media/${encodeURIComponent(item.mediaKey)})`, backgroundSize: "cover", backgroundPosition: "center", color: "white" } : undefined}>
+          <a className={`instagram-card ${item.color ?? ["insta-green", "insta-pink", "insta-cream"][index % 3]}`} href={item.url} target="_blank" rel="noreferrer" key={item.id ?? item.title} style={item.mediaKey ? { backgroundImage: `linear-gradient(to top, rgba(48,39,32,.72), transparent 65%), url(${mediaUrl(item.mediaKey)})`, backgroundSize: "cover", backgroundPosition: "center", color: "white" } : undefined}>
             <span>{item.label}</span>
             {!item.mediaKey ? <b>{item.symbol}</b> : <b />}
             <strong>{item.title}</strong>
@@ -306,12 +309,12 @@ export function InstagramCarousel() {
 export function GallerySection() {
   const [images, setImages] = useState<Array<{ id: number; objectKey: string; title: string; altText: string }>>([]);
   useEffect(() => {
-    fetch("/api/public/gallery").then((response) => response.json()).then((payload: { images?: typeof images }) => setImages(payload.images ?? [])).catch(() => undefined);
+    fetch(api("/public/gallery")).then((response) => response.json()).then((payload: { images?: typeof images }) => setImages(payload.images ?? [])).catch(() => undefined);
   }, []);
   return (
     <section className="section gallery-section" id="galeria">
       <div className="section-heading split-heading"><div><p className="kicker">Galería profesional</p><h2>Una práctica cercana a las familias</h2></div><p>Fotografías autorizadas de consultas, actividades clínicas y educación comunitaria.</p></div>
-      {images.length ? <div className="dynamic-gallery">{images.map((item) => <article key={item.id}><img src={`/media/${encodeURIComponent(item.objectKey)}`} alt={item.altText || item.title} /><span>{item.title}</span></article>)}</div> : <div className="gallery-grid">
+      {images.length ? <div className="dynamic-gallery">{images.map((item) => <article key={item.id}><img src={mediaUrl(item.objectKey)} alt={item.altText || item.title} /><span>{item.title}</span></article>)}</div> : <div className="gallery-grid">
         <article className="gallery-item gallery-main"><img src="/assets/hero-doctor.png" alt="Atención clínica pediátrica y nutricional" /><div><span>Consulta</span><strong>Atención pediátrica integral</strong></div></article>
         <article className="gallery-item gallery-placeholder gallery-green"><b aria-hidden="true">🌿</b><div><span>Nutrición</span><strong>Educación alimentaria</strong></div></article>
         <article className="gallery-item gallery-placeholder gallery-pink"><b aria-hidden="true">♡</b><div><span>Comunidad</span><strong>Actividades con familias</strong></div></article>
@@ -331,7 +334,7 @@ export function NewsletterForm() {
     setSending(true);
     setStatus("");
     try {
-      const response = await fetch("/api/subscribe", {
+      const response = await fetch(api("/subscribe"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),

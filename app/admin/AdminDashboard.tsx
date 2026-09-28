@@ -2,22 +2,25 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { api as apiUrl, mediaUrl } from "../../lib/api";
+import { authHeaders, onUnauthorized } from "./session";
 
 type Role = "admin" | "editor";
 type SessionUser = { email: string; name: string; role: Role };
 type Post = { id: number; slug: string; title: string; excerpt: string; content: string; category: string; coverKey: string | null; status: string; publishedAt: string | null; updatedAt: string };
 type AdminComment = { id: number; postSlug: string; author: string; message: string; status: string; createdAt: string };
-type Media = { id: number; objectKey: string; filename: string; mimeType: string; size: number; altText: string; title: string; purpose: string; active: number; createdAt: string };
-type InstagramPost = { id: number; url: string; title: string; label: string; active: number; sortOrder: number };
+type Media = { id: number; objectKey: string; filename: string; mimeType: string; size: number; altText: string; title: string; purpose: string; active: boolean; createdAt: string };
+type InstagramPost = { id: number; url: string; title: string; label: string; active: boolean; sortOrder: number };
 type Subscriber = { id: number; email: string; createdAt: string };
-type User = { id: number; email: string; displayName: string; role: Role; active: number };
+type User = { id: number; email: string; displayName: string; role: Role; active: boolean };
 
 const tabs = ["Resumen", "Artículos", "Comentarios", "Imágenes", "Instagram", "Suscriptores", "Usuarios"] as const;
 type Tab = (typeof tabs)[number];
 
-async function api<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, options);
-  const payload = (await response.json()) as T & { error?: string };
+async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(apiUrl(path.replace(/^\/api/, "")), { ...options, headers: { ...(options.headers ?? {}), ...authHeaders() } });
+  const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
+  if (response.status === 401) onUnauthorized();
   if (!response.ok) throw new Error(payload.error ?? "No fue posible completar la solicitud");
   return payload;
 }
@@ -43,7 +46,7 @@ export function AdminDashboard({ signedInEmail }: { signedInEmail: string }) {
   const [users, setUsers] = useState<User[]>([]);
   const [postForm, setPostForm] = useState(emptyPost);
   const [instagramForm, setInstagramForm] = useState({ url: "", title: "", label: "Pediatría", sortOrder: 0 });
-  const [userForm, setUserForm] = useState({ email: "", displayName: "", role: "editor" as Role });
+  const [userForm, setUserForm] = useState({ email: "", displayName: "", role: "editor" as Role, telefono: "" });
 
   const loadOverview = useCallback(async () => {
     const result = await api<{ user: SessionUser; counts: typeof counts }>("/api/admin/overview");
@@ -105,9 +108,7 @@ export function AdminDashboard({ signedInEmail }: { signedInEmail: string }) {
   async function uploadMedia(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const response = await fetch("/api/admin/media", { method: "POST", body: new FormData(form) });
-    const payload = (await response.json()) as { error?: string; message?: string };
-    if (!response.ok) throw new Error(payload.error ?? "No se pudo subir la imagen");
+    await api("/api/admin/media", { method: "POST", body: new FormData(form) });
     form.reset(); flash("Imagen subida correctamente");
     setMedia((await api<{ media: Media[] }>("/api/admin/media")).media); await loadOverview();
   }
@@ -127,7 +128,7 @@ export function AdminDashboard({ signedInEmail }: { signedInEmail: string }) {
 
   async function toggleInstagram(item: InstagramPost) {
     await api("/api/admin/instagram", jsonOptions("PUT", { ...item, active: !item.active }));
-    setInstagram(instagram.map((post) => post.id === item.id ? { ...post, active: item.active ? 0 : 1 } : post));
+    setInstagram(instagram.map((post) => post.id === item.id ? { ...post, active: !item.active } : post));
   }
 
   async function deleteInstagram(item: InstagramPost) {
@@ -138,13 +139,13 @@ export function AdminDashboard({ signedInEmail }: { signedInEmail: string }) {
   async function saveUser(event: FormEvent) {
     event.preventDefault();
     await api("/api/admin/users", jsonOptions("POST", userForm));
-    setUserForm({ email: "", displayName: "", role: "editor" });
+    setUserForm({ email: "", displayName: "", role: "editor", telefono: "" });
     setUsers((await api<{ users: User[] }>("/api/admin/users")).users); flash("Usuario autorizado");
   }
 
   async function toggleUser(item: User) {
     await api("/api/admin/users", jsonOptions("PUT", { ...item, active: !item.active }));
-    setUsers(users.map((user) => user.id === item.id ? { ...user, active: item.active ? 0 : 1 } : user));
+    setUsers(users.map((user) => user.id === item.id ? { ...user, active: !item.active } : user));
   }
 
   function exportSubscribers() {
@@ -157,7 +158,7 @@ export function AdminDashboard({ signedInEmail }: { signedInEmail: string }) {
   if (denied || !session) return (
     <section className="admin-denied">
       <span>Acceso pendiente</span><h1>Tu cuenta todavía no está autorizada</h1>
-      <p>Has iniciado sesión como <strong>{signedInEmail}</strong>. Este correo debe agregarse a la lista de administradores del sitio.</p>
+      <p>{denied || <>Has iniciado sesión como <strong>{signedInEmail}</strong>. Este correo debe agregarse a la lista de administradores del sitio.</>}</p>
       <Link href="/">Volver a la página principal</Link>
     </section>
   );
@@ -197,7 +198,7 @@ export function AdminDashboard({ signedInEmail }: { signedInEmail: string }) {
 
         {tab === "Comentarios" ? <div className="admin-table-list"><div className="list-header"><h2>Moderación</h2><p>Los comentarios nuevos permanecen ocultos hasta que sean aprobados.</p></div>{comments.map((comment) => <article key={comment.id}><div><span className={`status ${comment.status}`}>{comment.status}</span><strong>{comment.author}</strong><small>{comment.postSlug} · {comment.createdAt}</small><p>{comment.message}</p></div><div>{comment.status !== "approved" ? <button className="approve" onClick={() => void moderate(comment, "approved")}>Aprobar</button> : null}<button onClick={() => void moderate(comment, "hidden")}>Ocultar</button><button className="danger" onClick={() => void deleteComment(comment)}>Eliminar</button></div></article>)}</div> : null}
 
-        {tab === "Imágenes" ? <div className="media-manager"><form className="admin-form upload-form" onSubmit={(event) => void uploadMedia(event).catch((error: Error) => flash(error.message))}><h2>Subir imagen</h2><label>Archivo<input type="file" name="file" accept="image/*" required /></label><label>Título<input name="title" required /></label><label>Texto alternativo<input name="altText" placeholder="Describe brevemente la fotografía" /></label><label>Uso<select name="purpose"><option value="library">Biblioteca general</option><option value="gallery">Galería pública</option><option value="blog">Portada de blog</option><option value="instagram">Instagram</option></select></label><button className="primary" type="submit">Subir imagen</button></form><div className="media-grid">{media.map((item) => <article key={item.id}><img src={`/media/${encodeURIComponent(item.objectKey)}`} alt={item.altText || item.title} /><div><span>{item.purpose}</span><strong>{item.title || item.filename}</strong><button className="danger" onClick={() => void deleteMedia(item)}>Eliminar</button></div></article>)}</div></div> : null}
+        {tab === "Imágenes" ? <div className="media-manager"><form className="admin-form upload-form" onSubmit={(event) => void uploadMedia(event).catch((error: Error) => flash(error.message))}><h2>Subir imagen</h2><label>Archivo<input type="file" name="file" accept="image/*" required /></label><label>Título<input name="title" required /></label><label>Texto alternativo<input name="altText" placeholder="Describe brevemente la fotografía" /></label><label>Uso<select name="purpose"><option value="library">Biblioteca general</option><option value="gallery">Galería pública</option><option value="blog">Portada de blog</option><option value="instagram">Instagram</option></select></label><button className="primary" type="submit">Subir imagen</button></form><div className="media-grid">{media.map((item) => <article key={item.id}><img src={mediaUrl(item.objectKey)} alt={item.altText || item.title} /><div><span>{item.purpose}</span><strong>{item.title || item.filename}</strong><button className="danger" onClick={() => void deleteMedia(item)}>Eliminar</button></div></article>)}</div></div> : null}
 
         {tab === "Instagram" ? <div className="instagram-manager">
           <section className="instagram-connection connected">
@@ -224,7 +225,7 @@ export function AdminDashboard({ signedInEmail }: { signedInEmail: string }) {
 
         {tab === "Suscriptores" ? <div className="admin-table-list"><div className="list-header subscribers-header"><div><h2>Suscriptores</h2><p>{subscribers.length} correos registrados</p></div><button className="primary" onClick={exportSubscribers}>Exportar CSV</button></div>{subscribers.map((item) => <article key={item.id}><div><strong>{item.email}</strong><small>Registrado: {item.createdAt}</small></div></article>)}</div> : null}
 
-        {tab === "Usuarios" ? <div className="admin-two-columns"><form className="admin-form" onSubmit={saveUser}><h2>Autorizar usuario</h2><label>Correo de ChatGPT<input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} required /></label><label>Nombre<input value={userForm.displayName} onChange={(e) => setUserForm({ ...userForm, displayName: e.target.value })} /></label><label>Rol<select value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value as Role })}><option value="editor">Editora</option><option value="admin">Administrador</option></select></label><button className="primary" type="submit">Autorizar acceso</button></form><div className="admin-list"><h2>Usuarios autorizados</h2>{users.map((item) => <article key={item.id}><div><span className={`status ${item.active ? "published" : "hidden"}`}>{item.active ? "Activo" : "Suspendido"}</span><h3>{item.displayName || item.email}</h3><small>{item.email} · {item.role}</small></div><button onClick={() => void toggleUser(item)}>{item.active ? "Suspender" : "Activar"}</button></article>)}</div></div> : null}
+        {tab === "Usuarios" ? <div className="admin-two-columns"><form className="admin-form" onSubmit={saveUser}><h2>Autorizar usuario</h2><label>Correo (recibirá el código de acceso)<input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} required /></label><label>Nombre<input value={userForm.displayName} onChange={(e) => setUserForm({ ...userForm, displayName: e.target.value })} /></label><label>Celular (opcional, respaldo por SMS)<input type="tel" value={userForm.telefono} onChange={(e) => setUserForm({ ...userForm, telefono: e.target.value })} placeholder="809 000 0000" /></label><label>Rol<select value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value as Role })}><option value="editor">Editora</option><option value="admin">Administrador</option></select></label><button className="primary" type="submit">Autorizar acceso</button></form><div className="admin-list"><h2>Usuarios autorizados</h2>{users.map((item) => <article key={item.id}><div><span className={`status ${item.active ? "published" : "hidden"}`}>{item.active ? "Activo" : "Suspendido"}</span><h3>{item.displayName || item.email}</h3><small>{item.email} · {item.role}</small></div><button onClick={() => void toggleUser(item)}>{item.active ? "Suspender" : "Activar"}</button></article>)}</div></div> : null}
       </section>
     </div>
   );

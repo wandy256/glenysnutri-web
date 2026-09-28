@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Manrope:wght@400;500;600;700&display=swap');
+/* Fuentes Fraunces y Manrope: se cargan con <link> en app/layout.tsx */
 @import "tailwindcss";
 
 :root {
