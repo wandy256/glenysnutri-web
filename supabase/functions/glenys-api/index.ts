@@ -11,7 +11,7 @@
 //   /admin/session|overview|posts|comments|instagram|media|subscribers|users  (Bearer token)
 // =====================================================================
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { enviarCorreo, enviarSms, correoConfigurado, correoCodigo } from "./avisos.ts";
+import { enviarCorreo, correoConfigurado, correoCodigo, verifyEnviar, verifyComprobar } from "./avisos.ts";
 
 // Acceso por la API REST con la clave de servicio (las tablas glenys_* están cerradas para el público).
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
@@ -101,6 +101,12 @@ async function requireRole(req: Request, adminOnly = false): Promise<Usuario> {
 }
 
 // ---------------------------------------------------------------- acceso por código
+const VERIFY = "twilio-verify";
+async function verifySid(): Promise<string> {
+  const r = ok(await db.from("configuracion").select("valor").eq("clave", "twilio_verify_sid").maybeSingle());
+  if (!r?.valor) throw new Aviso("El envío de códigos por SMS no está configurado.", 503);
+  return r.valor;
+}
 async function solicitarCodigo(body: Record<string, unknown>, ip: string) {
   const email = clean(body.email, 180).toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Aviso("Escribe un correo válido");
@@ -121,8 +127,10 @@ async function solicitarCodigo(body: Record<string, unknown>, ip: string) {
     console.error("correo:", r);
   }
   if (u.telefono) {
-    const r = await enviarSms(u.telefono, `Glenys Nina · Tu código de acceso al panel es ${codigo}. Vence en 10 minutos.`);
-    if (r.startsWith("ok")) {
+    // SMS con Twilio Verify (mismo servicio que el portal de pagos; entrega fiable a EE. UU. y RD).
+    const r = await verifyEnviar(await verifySid(), u.telefono);
+    if (r === "ok") {
+      ok(await T("login_codes").update({ code_hash: VERIFY }).eq("id", fila.id));
       return { ok: true, canal: "sms", mensaje: `Te enviamos el código por SMS al número terminado en ${String(u.telefono).slice(-4)}.` };
     }
     console.error("sms:", r);
@@ -139,7 +147,14 @@ async function verificarCodigo(body: Record<string, unknown>) {
     .gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }).limit(1).maybeSingle());
   if (!c) throw new Aviso("El código venció. Pide uno nuevo.");
   if (c.attempts >= 5) throw new Aviso("Demasiados intentos. Pide un código nuevo.", 429);
-  if (c.code_hash !== await sha256(email + ":" + codigo)) {
+  let valido: boolean;
+  if (c.code_hash === VERIFY) {
+    const u0 = await usuarioActivo(email);
+    valido = !!u0?.telefono && (await verifyComprobar(await verifySid(), u0.telefono, codigo)) === "ok";
+  } else {
+    valido = c.code_hash === await sha256(email + ":" + codigo);
+  }
+  if (!valido) {
     ok(await T("login_codes").update({ attempts: c.attempts + 1 }).eq("id", c.id));
     throw new Aviso("El código no es correcto.");
   }

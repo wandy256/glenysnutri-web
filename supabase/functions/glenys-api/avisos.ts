@@ -77,3 +77,32 @@ export function correoCodigo(nombre: string, codigo: string) {
 <tr><td style="padding:14px 26px;background:#faf7f2;font-size:12px;color:#7a6f66">glenysnutri.com · Sitio administrado por WandyWise Web Services</td></tr>
 </table></td></tr></table></body></html>`;
 }
+
+// ---------------------------------------------------------------- Twilio Verify (SMS con código)
+function e164(t: string) {
+  let to = t.replace(/[^\d+]/g, "");
+  if (!to.startsWith("+")) to = (to.length === 10 ? "+1" : "+") + to;
+  return to;
+}
+async function verifyPost(path: string, params: Record<string, string>) {
+  const sid = Deno.env.get("TWILIO_ACCOUNT_SID"), tok = Deno.env.get("TWILIO_AUTH_TOKEN");
+  if (!sid || !tok) return { ok: false, status: 0, j: { message: "Twilio no configurado" } };
+  const r = await fetch(`https://verify.twilio.com/v2${path}`, {
+    method: "POST",
+    headers: { Authorization: "Basic " + btoa(`${sid}:${tok}`), "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(params),
+  });
+  // deno-lint-ignore no-explicit-any
+  const j: any = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, j };
+}
+/** Envía un código por SMS con Twilio Verify. Devuelve "ok" o el error como texto. */
+export async function verifyEnviar(servicio: string, telefono: string): Promise<string> {
+  const r = await verifyPost(`/Services/${servicio}/Verifications`, { To: e164(telefono), Channel: "sms", Locale: "es" });
+  return r.ok ? "ok" : `error: ${r.j?.message ?? r.status}`;
+}
+/** Comprueba el código recibido por SMS. Devuelve "ok" si es correcto. */
+export async function verifyComprobar(servicio: string, telefono: string, codigo: string): Promise<string> {
+  const r = await verifyPost(`/Services/${servicio}/VerificationCheck`, { To: e164(telefono), Code: codigo });
+  return r.ok && r.j?.status === "approved" ? "ok" : `error: ${r.j?.status ?? r.j?.message ?? r.status}`;
+}
