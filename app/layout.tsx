@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website", url: "https://glenysnutri.com/", locale: "es_DO", siteName: "Dra. Glenys Nina Cuevas",
     title: "Dra. Glenys Nina Cuevas | Pediatría y Nutrición Clínica", description: DESCRIPTION,
-    images: [{ url: "/assets/hero-doctor.png" }],
+    images: [{ url: "/assets/hero-doctor.jpg" }],
   },
 };
 

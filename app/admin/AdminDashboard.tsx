@@ -10,7 +10,7 @@ type SessionUser = { email: string; name: string; role: Role };
 type Post = { id: number; slug: string; title: string; excerpt: string; content: string; category: string; coverKey: string | null; status: string; publishedAt: string | null; updatedAt: string };
 type AdminComment = { id: number; postSlug: string; author: string; message: string; status: string; createdAt: string };
 type Media = { id: number; objectKey: string; filename: string; mimeType: string; size: number; altText: string; title: string; purpose: string; active: boolean; createdAt: string };
-type InstagramPost = { id: number; url: string; title: string; label: string; active: boolean; sortOrder: number };
+type InstagramPost = { id: number; url: string; title: string; label: string; mediaKey: string | null; active: boolean; sortOrder: number };
 type Subscriber = { id: number; email: string; createdAt: string };
 type User = { id: number; email: string; displayName: string; role: Role; active: boolean };
 
@@ -119,9 +119,20 @@ export function AdminDashboard({ signedInEmail }: { signedInEmail: string }) {
     setMedia(media.filter((image) => image.id !== item.id)); flash("Imagen eliminada");
   }
 
-  async function saveInstagram(event: FormEvent) {
+  /** Sube la imagen de una publicación de Instagram y devuelve su clave en el almacenamiento. */
+  async function subirImagenInstagram(file: File, titulo: string) {
+    const data = new FormData();
+    data.append("file", file); data.append("title", titulo); data.append("altText", titulo); data.append("purpose", "instagram");
+    return (await api<{ objectKey: string }>("/api/admin/media", { method: "POST", body: data })).objectKey;
+  }
+
+  async function saveInstagram(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await api("/api/admin/instagram", jsonOptions("POST", instagramForm));
+    const form = event.currentTarget;
+    const file = (form.elements.namedItem("igImage") as HTMLInputElement | null)?.files?.[0];
+    const mediaKey = file ? await subirImagenInstagram(file, instagramForm.title) : null;
+    await api("/api/admin/instagram", jsonOptions("POST", { ...instagramForm, mediaKey }));
+    form.reset();
     setInstagramForm({ url: "", title: "", label: "Pediatría", sortOrder: 0 });
     setInstagram((await api<{ posts: InstagramPost[] }>("/api/admin/instagram")).posts); flash("Publicación agregada al carrusel");
   }
@@ -129,6 +140,13 @@ export function AdminDashboard({ signedInEmail }: { signedInEmail: string }) {
   async function toggleInstagram(item: InstagramPost) {
     await api("/api/admin/instagram", jsonOptions("PUT", { ...item, active: !item.active }));
     setInstagram(instagram.map((post) => post.id === item.id ? { ...post, active: !item.active } : post));
+  }
+
+  async function changeInstagramImage(item: InstagramPost, file: File | undefined) {
+    if (!file) return;
+    const mediaKey = await subirImagenInstagram(file, item.title);
+    await api("/api/admin/instagram", jsonOptions("PUT", { ...item, mediaKey }));
+    setInstagram(instagram.map((post) => post.id === item.id ? { ...post, mediaKey } : post)); flash("Imagen actualizada");
   }
 
   async function deleteInstagram(item: InstagramPost) {
@@ -211,15 +229,16 @@ export function AdminDashboard({ signedInEmail }: { signedInEmail: string }) {
           </section>
 
           <div className="admin-two-columns">
-            <form className="admin-form" onSubmit={saveInstagram}>
+            <form className="admin-form" onSubmit={(event) => void saveInstagram(event).catch((error: Error) => flash(error.message))}>
               <div><span className="fallback-label">Paso 1</span><h2>Agregar publicación</h2></div>
-              <p className="form-help">En Instagram, abre el post o reel, selecciona “Copiar enlace” y pégalo aquí. La publicación se mostrará completa en el carrusel.</p>
+              <p className="form-help">En Instagram, abre el post o reel, selecciona “Copiar enlace” y pégalo aquí. Sube también la imagen del post (la misma que publicaste): así la tarjeta del sitio se ve igual que en Instagram.</p>
               <label>Enlace del post o reel<input type="url" value={instagramForm.url} onChange={(e) => setInstagramForm({ ...instagramForm, url: e.target.value })} placeholder="https://www.instagram.com/p/..." required /></label>
+              <label>Imagen del post (recomendado)<input type="file" name="igImage" accept="image/*" /></label>
               <label>Título interno<input value={instagramForm.title} onChange={(e) => setInstagramForm({ ...instagramForm, title: e.target.value })} placeholder="Ej.: Alimentación complementaria" required /></label>
               <div className="form-row"><label>Etiqueta<input value={instagramForm.label} onChange={(e) => setInstagramForm({ ...instagramForm, label: e.target.value })} /></label><label>Orden<input type="number" value={instagramForm.sortOrder} onChange={(e) => setInstagramForm({ ...instagramForm, sortOrder: Number(e.target.value) })} /></label></div>
               <button className="primary" type="submit">Mostrar en el carrusel</button>
             </form>
-            <div className="admin-list"><h2>Publicaciones del carrusel</h2>{instagram.length ? instagram.map((item) => <article key={item.id}><div><span className={`status ${item.active ? "published" : "hidden"}`}>{item.active ? "Visible" : "Oculta"}</span><h3>{item.title}</h3><a href={item.url} target="_blank" rel="noreferrer">Ver post ↗</a></div><div><button onClick={() => void toggleInstagram(item)}>{item.active ? "Ocultar" : "Mostrar"}</button><button className="danger" onClick={() => void deleteInstagram(item)}>Retirar</button></div></article>) : <p className="empty-state">Todavía no hay publicaciones agregadas.</p>}</div>
+            <div className="admin-list"><h2>Publicaciones del carrusel</h2>{instagram.length ? instagram.map((item) => <article key={item.id}>{item.mediaKey ? <img className="ig-thumb" src={mediaUrl(item.mediaKey)} alt="" /> : null}<div><span className={`status ${item.active ? "published" : "hidden"}`}>{item.active ? "Visible" : "Oculta"}</span><h3>{item.title}</h3><a href={item.url} target="_blank" rel="noreferrer">Ver post ↗</a></div><div><label className="file-button">{item.mediaKey ? "Cambiar imagen" : "Poner imagen"}<input type="file" accept="image/*" hidden onChange={(e) => void changeInstagramImage(item, e.target.files?.[0]).catch((error: Error) => flash(error.message))} /></label><button onClick={() => void toggleInstagram(item)}>{item.active ? "Ocultar" : "Mostrar"}</button><button className="danger" onClick={() => void deleteInstagram(item)}>Retirar</button></div></article>) : <p className="empty-state">Todavía no hay publicaciones agregadas.</p>}</div>
           </div>
         </div> : null}
 

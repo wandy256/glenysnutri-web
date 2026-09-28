@@ -35,7 +35,7 @@ export default function AdminPage() {
   return (
     <main className="admin-shell">
       <header className="admin-header">
-        <Link href="/" className="admin-brand"><Image src="/assets/logo-glenys.png" width={1988} height={602} alt="Dra. Glenys Nina" priority unoptimized /></Link>
+        <Link href="/" className="admin-brand"><Image src="/assets/logo-glenys.webp" width={700} height={212} alt="Dra. Glenys Nina" priority unoptimized /></Link>
         {user ? <div><span>{user.name}</span><a href="#" onClick={(e) => { e.preventDefault(); signOut(); }}>Cerrar sesión</a></div> : null}
       </header>
       {!ready ? <section className="admin-state"><div className="admin-loader" /><p>Preparando tu panel…</p></section>

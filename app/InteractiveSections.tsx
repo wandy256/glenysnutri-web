@@ -1,14 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { api, mediaUrl } from "../lib/api";
 import { fechaLarga } from "../lib/fecha";
-
-declare global {
-  interface Window {
-    instgrm?: { Embeds: { process: () => void } };
-  }
-}
 
 type Comment = { id: number; author: string; message: string; createdAt: string };
 type Engagement = { likes: number; comments: Comment[] };
@@ -52,8 +47,16 @@ function getVisitorId() {
   return value;
 }
 
-export function BlogSection({ initialPosts = [] }: { initialPosts?: PublicPost[] }) {
+const quitarAcentos = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/**
+ * Lista de artículos. En la portada se muestran los más recientes (`limit`);
+ * en /blog se muestran todos, con filtro por categoría y buscador (`filtros`).
+ */
+export function BlogSection({ initialPosts = [], limit, filtros = false }: { initialPosts?: PublicPost[]; limit?: number; filtros?: boolean }) {
   const [posts, setPosts] = useState<PublicPost[]>(initialPosts);
+  const [categoria, setCategoria] = useState("Todas");
+  const [buscar, setBuscar] = useState("");
   const [data, setData] = useState<Record<string, Engagement>>({});
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<PublicPost | null>(null);
@@ -81,7 +84,15 @@ export function BlogSection({ initialPosts = [] }: { initialPosts?: PublicPost[]
       .catch(() => undefined);
   }, []);
 
-  useEffect(() => { posts.forEach((post) => void load(post.slug)); }, [posts]);
+  const categorias = ["Todas", ...Array.from(new Set(posts.map((p) => p.category).filter(Boolean)))];
+  const q = quitarAcentos(buscar.trim());
+  const visibles = posts
+    .filter((p) => categoria === "Todas" || p.category === categoria)
+    .filter((p) => !q || quitarAcentos(`${p.title} ${p.excerpt} ${p.category}`).includes(q))
+    .slice(0, limit ?? posts.length);
+  const claveVisibles = visibles.map((p) => p.slug).join(",");
+
+  useEffect(() => { claveVisibles.split(",").filter(Boolean).forEach((slug) => void load(slug)); }, [claveVisibles]);
 
   async function like(slug: string) {
     if (liked.has(slug)) return;
@@ -128,31 +139,47 @@ export function BlogSection({ initialPosts = [] }: { initialPosts?: PublicPost[]
   }
 
   return (
-    <section className="section blog-section" id="blog">
-      <div className="section-heading split-heading">
-        <div>
-          <p className="kicker">Blog de la doctora</p>
-          <h2>Información que acompaña decisiones reales</h2>
+    <section className={`section blog-section ${filtros ? "blog-archive" : ""}`} id="blog">
+      {filtros ? (
+        <div className="blog-filters">
+          <div className="chips" role="group" aria-label="Filtrar por tema">
+            {categorias.map((c) => (
+              <button key={c} type="button" className={c === categoria ? "chip active" : "chip"} aria-pressed={c === categoria} onClick={() => setCategoria(c)}>{c}</button>
+            ))}
+          </div>
+          <label className="blog-search">
+            <span className="sr-only">Buscar artículos</span>
+            <input type="search" placeholder="Buscar: miel, reflujo, meriendas…" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
+          </label>
         </div>
-        <p>Contenido educativo sobre pediatría, nutrición clínica y bienestar familiar.</p>
-      </div>
+      ) : (
+        <div className="section-heading split-heading">
+          <div>
+            <p className="kicker">Blog de la doctora</p>
+            <h2>Información que acompaña decisiones reales</h2>
+          </div>
+          <p>Contenido educativo sobre pediatría, nutrición clínica y bienestar familiar.</p>
+        </div>
+      )}
+
+      {filtros && !visibles.length ? <p className="empty-state blog-empty">No encontramos artículos con esa búsqueda. Prueba con otra palabra.</p> : null}
 
       <div className="blog-grid">
-        {posts.map((post, index) => {
+        {visibles.map((post, index) => {
           const engagement = data[post.slug] ?? { likes: 0, comments: [] };
           const themes = ["post-green", "post-pink", "post-cream"];
           const symbols = ["🍐", "🍉", "🥬"];
           return (
             <article className="blog-card" key={post.slug}>
-              <div className={`post-cover ${post.theme ?? themes[index % themes.length]}`} style={post.coverKey ? { backgroundImage: `url(${mediaUrl(post.coverKey)})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
+              <a className={`post-cover ${post.coverKey ? "has-photo" : post.theme ?? themes[index % themes.length]}`} href={`/blog/${post.slug}/`} tabIndex={-1} aria-hidden="true">
+                {post.coverKey ? <img src={mediaUrl(post.coverKey)} alt="" loading="lazy" decoding="async" /> : <b>{post.symbol ?? symbols[index % symbols.length]}</b>}
                 <span>{post.category}</span>
-                {!post.coverKey ? <b aria-hidden="true">{post.symbol ?? symbols[index % symbols.length]}</b> : null}
-              </div>
+              </a>
               <div className="post-body">
                 <small>{post.date ?? fechaLarga(post.publishedAt)}{post.read ? ` · ${post.read} de lectura` : ""}</small>
-                <h3><a href={`/blog/${post.slug}`}>{post.title}</a></h3>
+                <h3><a href={`/blog/${post.slug}/`}>{post.title}</a></h3>
                 <p>{post.excerpt}</p>
-                <a className="read-post" href={`/blog/${post.slug}`}>Leer artículo →</a>
+                <a className="read-post" href={`/blog/${post.slug}/`}>Leer artículo →</a>
                 <div className="post-actions">
                   <button
                     className={liked.has(post.slug) ? "liked" : ""}
@@ -171,6 +198,10 @@ export function BlogSection({ initialPosts = [] }: { initialPosts?: PublicPost[]
           );
         })}
       </div>
+
+      {limit && posts.length > limit ? (
+        <div className="blog-more"><Link className="button button-outline-dark" href="/blog/">Ver todos los artículos ({posts.length}) →</Link></div>
+      ) : null}
 
       {selected ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
@@ -213,9 +244,7 @@ export function BlogSection({ initialPosts = [] }: { initialPosts?: PublicPost[]
 
 export function InstagramCarousel() {
   const rail = useRef<HTMLDivElement>(null);
-  const [items, setItems] = useState<InstagramItem[]>(
-    instagramTopics.map((item) => ({ ...item, url: `https://www.instagram.com/${INSTAGRAM_ACCOUNT}/` })),
-  );
+  const [items, setItems] = useState<InstagramItem[]>([]);
   const move = (direction: number) => rail.current?.scrollBy({ left: direction * 330, behavior: "smooth" });
 
   useEffect(() => {
@@ -224,21 +253,8 @@ export function InstagramCarousel() {
     }).catch(() => undefined);
   }, []);
 
-  useEffect(() => {
-    if (!items.some((item) => isInstagramPostUrl(item.url))) return;
-    const processEmbeds = () => window.setTimeout(() => window.instgrm?.Embeds.process(), 0);
-    const existing = document.querySelector<HTMLScriptElement>('script[src="https://www.instagram.com/embed.js"]');
-    if (existing) {
-      if (window.instgrm) processEmbeds();
-      else existing.addEventListener("load", processEmbeds, { once: true });
-      return;
-    }
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = "https://www.instagram.com/embed.js";
-    script.addEventListener("load", processEmbeds, { once: true });
-    document.body.appendChild(script);
-  }, [items]);
+  // Sin publicaciones cargadas se muestran temas de ejemplo que llevan al perfil.
+  const lista: InstagramItem[] = items.length ? items : instagramTopics.map((item) => ({ ...item, url: `https://www.instagram.com/${INSTAGRAM_ACCOUNT}/` }));
 
   return (
     <section className="section instagram-section" id="instagram">
@@ -253,46 +269,46 @@ export function InstagramCarousel() {
         </div>
       </div>
       <div className="instagram-rail" ref={rail}>
-        {items.map((item, index) => isInstagramPostUrl(item.url) ? (
-          <article className="instagram-embed-card" key={item.id ?? item.url}>
-            <blockquote
-              className="instagram-media"
-              data-instgrm-permalink={item.url}
-              data-instgrm-version="14"
-            >
-              <a href={item.url} target="_blank" rel="noreferrer">Ver publicación de @{INSTAGRAM_ACCOUNT}</a>
-            </blockquote>
-          </article>
-        ) : (
-          <a className={`instagram-card ${item.color ?? ["insta-green", "insta-pink", "insta-cream"][index % 3]}`} href={item.url} target="_blank" rel="noreferrer" key={item.id ?? item.title} style={item.mediaKey ? { backgroundImage: `linear-gradient(to top, rgba(48,39,32,.72), transparent 65%), url(${mediaUrl(item.mediaKey)})`, backgroundSize: "cover", backgroundPosition: "center", color: "white" } : undefined}>
+        {lista.map((item, index) => (
+          <a
+            className={`instagram-card ${item.mediaKey ? "has-photo" : item.color ?? ["insta-green", "insta-pink", "insta-cream"][index % 3]}`}
+            href={isInstagramPostUrl(item.url) ? item.url.split("?")[0] : item.url}
+            target="_blank"
+            rel="noreferrer"
+            key={item.id ?? item.title}
+          >
+            {item.mediaKey ? <img src={mediaUrl(item.mediaKey)} alt="" loading="lazy" decoding="async" /> : null}
             <span>{item.label}</span>
-            {!item.mediaKey ? <b>{item.symbol}</b> : <b />}
+            {!item.mediaKey ? <b aria-hidden="true">{item.symbol ?? <IgGlyph />}</b> : <b />}
             <strong>{item.title}</strong>
             <small>Ver en Instagram ↗</small>
           </a>
         ))}
       </div>
-      <p className="integration-note">
-        Publicaciones seleccionadas y administradas desde el panel privado.
-      </p>
+      <a className="instagram-follow" href={`https://www.instagram.com/${INSTAGRAM_ACCOUNT}/`} target="_blank" rel="noreferrer">Seguir a @{INSTAGRAM_ACCOUNT} en Instagram ↗</a>
     </section>
   );
 }
 
+function IgGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4.2" /><circle cx="17.4" cy="6.6" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/** Galería: aparece sola cuando la doctora sube fotos con uso "Galería pública" desde el panel. */
 export function GallerySection() {
   const [images, setImages] = useState<Array<{ id: number; objectKey: string; title: string; altText: string }>>([]);
   useEffect(() => {
     fetch(api("/public/gallery")).then((response) => response.json()).then((payload: { images?: typeof images }) => setImages(payload.images ?? [])).catch(() => undefined);
   }, []);
+  if (!images.length) return null;
   return (
     <section className="section gallery-section" id="galeria">
-      <div className="section-heading split-heading"><div><p className="kicker">Galería profesional</p><h2>Una práctica cercana a las familias</h2></div><p>Fotografías autorizadas de consultas, actividades clínicas y educación comunitaria.</p></div>
-      {images.length ? <div className="dynamic-gallery">{images.map((item) => <article key={item.id}><img src={mediaUrl(item.objectKey)} alt={item.altText || item.title} /><span>{item.title}</span></article>)}</div> : <div className="gallery-grid">
-        <article className="gallery-item gallery-main"><img src="/assets/hero-doctor.png" alt="Atención clínica pediátrica y nutricional" /><div><span>Consulta</span><strong>Atención pediátrica integral</strong></div></article>
-        <article className="gallery-item gallery-placeholder gallery-green"><b aria-hidden="true">🌿</b><div><span>Nutrición</span><strong>Educación alimentaria</strong></div></article>
-        <article className="gallery-item gallery-placeholder gallery-pink"><b aria-hidden="true">♡</b><div><span>Comunidad</span><strong>Actividades con familias</strong></div></article>
-        <article className="gallery-item gallery-brand"><img src="/assets/logo-glenys.png" alt="Logo de la Dra. Glenys Nina" /><div><span>Compromiso</span><strong>Cuidar y nutrir</strong></div></article>
-      </div>}
+      <div className="section-heading split-heading"><div><p className="kicker">Galería</p><h2>Una práctica cercana a las familias</h2></div><p>Momentos de consulta, actividades clínicas y educación comunitaria.</p></div>
+      <div className="dynamic-gallery">{images.map((item) => <article key={item.id}><img src={mediaUrl(item.objectKey)} alt={item.altText || item.title} loading="lazy" />{item.title ? <span>{item.title}</span> : null}</article>)}</div>
     </section>
   );
 }

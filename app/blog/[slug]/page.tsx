@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { ArticlePage } from "./ArticlePage";
-import { buildPost, buildPostSlugs } from "../../../lib/posts";
+import { buildPost, buildPostList, buildPostSlugs } from "../../../lib/posts";
 import { SITE_URL, mediaUrl } from "../../../lib/api";
 
 export const dynamicParams = false;
@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     alternates: { canonical: url },
     openGraph: {
       type: "article", url, title: post.title, description: post.excerpt, locale: "es_DO",
-      siteName: "Dra. Glenys Nina Cuevas", images: [{ url: post.coverKey ? mediaUrl(post.coverKey) : `${SITE_URL}/assets/hero-doctor.png` }],
+      siteName: "Dra. Glenys Nina Cuevas", images: [{ url: post.coverKey ? mediaUrl(post.coverKey) : `${SITE_URL}/assets/hero-doctor.jpg` }],
       publishedTime: post.publishedAt ?? undefined,
     },
   };
@@ -30,6 +30,6 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function BlogArticle({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const post = await buildPost(slug);
-  return <ArticlePage slug={slug} initial={post} />;
+  const [post, lista] = await Promise.all([buildPost(slug), buildPostList()]);
+  return <ArticlePage slug={slug} initial={post} lista={lista} />;
 }
