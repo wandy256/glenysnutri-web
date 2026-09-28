@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { api, mediaUrl } from "../lib/api";
+import { fechaLarga } from "../lib/fecha";
 
 declare global {
   interface Window {
@@ -13,38 +14,10 @@ type Comment = { id: number; author: string; message: string; createdAt: string 
 type Engagement = { likes: number; comments: Comment[] };
 type PublicPost = { id?: number; slug: string; category: string; title: string; excerpt: string; content?: string; coverKey?: string | null; publishedAt?: string | null; date?: string; read?: string; theme?: string; symbol?: string };
 
-const fallbackPosts: PublicPost[] = [
-  {
-    slug: "alimentacion-complementaria",
-    category: "Nutrición infantil",
-    title: "Alimentación complementaria sin estrés",
-    excerpt: "Señales, texturas y hábitos para acompañar este momento con calma y seguridad.",
-    date: "12 julio 2026",
-    read: "5 min",
-    theme: "post-green",
-    symbol: "🍐",
-  },
-  {
-    slug: "hidratacion-saludable",
-    category: "Vida saludable",
-    title: "Hidratación real: más agua, menos azúcar",
-    excerpt: "Cómo elegir bebidas y alimentos que sí aportan hidratación durante los días de calor.",
-    date: "5 julio 2026",
-    read: "4 min",
-    theme: "post-pink",
-    symbol: "🍉",
-  },
-  {
-    slug: "hierro-en-la-infancia",
-    category: "Crecimiento",
-    title: "Hierro en la infancia: pequeñas decisiones, gran impacto",
-    excerpt: "Una guía clara sobre fuentes de hierro y combinaciones que favorecen su absorción.",
-    date: "28 junio 2026",
-    read: "6 min",
-    theme: "post-cream",
-    symbol: "🥬",
-  },
-];
+// Los artículos llegan ya cargados desde el build (initialPosts) y se actualizan desde la API al abrir la página.
+export type { PublicPost };
+
+
 
 const instagramTopics = [
   { label: "Nutrición", title: "Ideas frescas para sus meriendas", color: "insta-green", symbol: "🍓" },
@@ -79,8 +52,8 @@ function getVisitorId() {
   return value;
 }
 
-export function BlogSection() {
-  const [posts, setPosts] = useState<PublicPost[]>(fallbackPosts);
+export function BlogSection({ initialPosts = [] }: { initialPosts?: PublicPost[] }) {
+  const [posts, setPosts] = useState<PublicPost[]>(initialPosts);
   const [data, setData] = useState<Record<string, Engagement>>({});
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<PublicPost | null>(null);
@@ -176,7 +149,7 @@ export function BlogSection() {
                 {!post.coverKey ? <b aria-hidden="true">{post.symbol ?? symbols[index % symbols.length]}</b> : null}
               </div>
               <div className="post-body">
-                <small>{post.date ?? post.publishedAt?.slice(0, 10) ?? "Nueva publicación"}{post.read ? ` · ${post.read} de lectura` : ""}</small>
+                <small>{post.date ?? fechaLarga(post.publishedAt)}{post.read ? ` · ${post.read} de lectura` : ""}</small>
                 <h3><a href={`/blog/${post.slug}`}>{post.title}</a></h3>
                 <p>{post.excerpt}</p>
                 <a className="read-post" href={`/blog/${post.slug}`}>Leer artículo →</a>

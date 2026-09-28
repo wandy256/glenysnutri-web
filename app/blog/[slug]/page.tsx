@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ArticlePage } from "./ArticlePage";
 import { buildPost, buildPostSlugs } from "../../../lib/posts";
-import { SITE_URL } from "../../../lib/api";
+import { SITE_URL, mediaUrl } from "../../../lib/api";
 
 export const dynamicParams = false;
 
@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     alternates: { canonical: url },
     openGraph: {
       type: "article", url, title: post.title, description: post.excerpt, locale: "es_DO",
-      siteName: "Dra. Glenys Nina Cuevas", images: [{ url: `${SITE_URL}/assets/hero-doctor.png` }],
+      siteName: "Dra. Glenys Nina Cuevas", images: [{ url: post.coverKey ? mediaUrl(post.coverKey) : `${SITE_URL}/assets/hero-doctor.png` }],
       publishedTime: post.publishedAt ?? undefined,
     },
   };

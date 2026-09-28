@@ -17,11 +17,17 @@ async function getJson<T>(path: string): Promise<T | null> {
 }
 
 export async function buildPostSlugs(): Promise<string[]> {
-  const j = await getJson<{ posts?: { slug: string }[] }>("/public/posts");
-  return (j?.posts ?? []).map((p) => p.slug);
+  return (await buildPostList()).map((p) => p.slug);
 }
 
 export async function buildPost(slug: string): Promise<Post | null> {
   const j = await getJson<{ post: Post }>(`/public/posts?slug=${encodeURIComponent(slug)}`);
   return j?.post ?? null;
+}
+
+export type ListPost = { id: number; slug: string; title: string; excerpt: string; category: string; coverKey: string | null; publishedAt: string | null };
+
+export async function buildPostList(): Promise<ListPost[]> {
+  const j = await getJson<{ posts?: ListPost[] }>("/public/posts");
+  return j?.posts ?? [];
 }

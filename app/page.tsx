@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { BlogSection, GallerySection, InstagramCarousel, NewsletterForm } from "./InteractiveSections";
+import { buildPostList } from "../lib/posts";
 
 const WHATSAPP_URL =
   "https://wa.me/18295980131?text=Hola%20Dra.%20Glenys%2C%20deseo%20informaci%C3%B3n%20sobre%20una%20consulta.";
@@ -9,7 +10,9 @@ const MAP_URL =
 
 const INSTAGRAM_URL = "https://www.instagram.com/dra.glenys_nutri/";
 
-export default function Home() {
+export default async function Home() {
+  const posts = await buildPostList();
+  const ultimo = posts[0];
   return (
     <main>
       <header className="site-header">
@@ -82,9 +85,9 @@ export default function Home() {
               unoptimized
             />
           </div>
-          <a className="floating-story" href="#blog">
+          <a className="floating-story" href={ultimo ? `/blog/${ultimo.slug}/` : "#blog"}>
             <span>Nuevo en el blog</span>
-            <strong>Alimentación complementaria sin estrés</strong>
+            <strong>{ultimo?.title ?? "Consejos de pediatría y nutrición"}</strong>
             <em>Leer artículo →</em>
           </a>
         </div>
@@ -198,7 +201,7 @@ export default function Home() {
         </div>
       </section>
 
-      <BlogSection />
+      <BlogSection initialPosts={posts} />
 
       <GallerySection />
 
@@ -218,8 +221,9 @@ export default function Home() {
         <div className="contact-details">
           <article><span>01</span><div><small>Centro médico</small><strong>Constitución — CEMECO</strong></div></article>
           <article><span>02</span><div><small>Ubicación</small><strong>San Cristóbal, República Dominicana</strong></div></article>
-          <article><span>03</span><div><small>Instagram</small><a href={INSTAGRAM_URL} target="_blank" rel="noreferrer">@dra.glenys_nutri ↗</a></div></article>
-          <article><span>04</span><div><small>WhatsApp</small><a href={WHATSAPP_URL} target="_blank" rel="noreferrer">829-598-0131 ↗</a></div></article>
+          <article><span>03</span><div><small>Horario de consulta</small><strong>Lunes 8:00 a. m. – 1:00 p. m. · Viernes desde las 4:00 p. m.</strong></div></article>
+          <article><span>04</span><div><small>Instagram</small><a href={INSTAGRAM_URL} target="_blank" rel="noreferrer">@dra.glenys_nutri ↗</a></div></article>
+          <article><span>05</span><div><small>WhatsApp</small><a href={WHATSAPP_URL} target="_blank" rel="noreferrer">829-598-0131 ↗</a></div></article>
         </div>
       </section>
 
