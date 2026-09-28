@@ -12,10 +12,6 @@ export const metadata: Metadata = {
     title: "Dra. Glenys Nina Cuevas | Pediatría y Nutrición Clínica", description: DESCRIPTION,
     images: [{ url: "/assets/hero-doctor.png" }],
   },
-  icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-  },
 };
 
 export default function RootLayout({
